@@ -312,6 +312,52 @@ pipeline.start(config)
 # controller
 controller = RobotController()
 
+# controller
+# controller = RobotController()
+def Ni(n, i):
+     return np.math.factorial(n) / (np.math.factorial(i) * np.math.factorial(n - i))
+
+def basisFunction(n, i, t):
+     J = np.array(Ni(n, i) * (t ** i) * (1 - t) ** (n - i))
+     return J
+ 
+def bezier(points):
+    
+    x = points[:, 0]
+    y = points[:, 1]
+    z = points[:, 2]
+    
+    divs = 50
+    contpoints = np.size(x,0)
+    segs = contpoints - 1
+    i = 0
+    t = np.linspace(0, 1, divs)
+    b = []
+     
+    xBezier = np.zeros((1, divs))
+    yBezier = np.zeros((1, divs))
+    zBezier = np.zeros((1, divs))
+    
+    for k in range(0, contpoints):
+        b.append(basisFunction(segs, i, t))
+
+        xBezier = basisFunction(segs, i, t) * x[k] + xBezier
+        yBezier = basisFunction(segs, i, t) * y[k] + yBezier
+        zBezier = basisFunction(segs, i, t) * z[k] + zBezier
+        i += 1
+    
+    fig1 = plt.figure(figsize=(4, 4))
+    ax1 = fig1.add_subplot(111, projection='3d')
+    ax1.scatter(x, y, z, c='black')
+    ax1.plot(xBezier[0], yBezier[0], zBezier[0], c='blue')
+    plt.show()
+    
+    _bezier = np.zeros((divs, 3))
+    _bezier[:, 0] = xBezier
+    _bezier[:, 1] = yBezier
+    _bezier[:, 2] = zBezier
+    return _bezier
+
  
 
 try:
@@ -362,28 +408,62 @@ try:
         
         markerId=42
         markerDict = cv2.aruco.getPredefinedDictionary(ARUCO_DICT["DICT_4X4_50"])
-                
+        marker = Marker()        
         markerReader = MarkerReader(markerId, markerDict, 51, cameraMatrix, distortionCoeffs)
-        color_image, marker = markerReader.detectMarkers(color_image, markerDict)
+        (found, color_image, marker) = markerReader.detectMarkers(color_image, markerDict)
         # color_image = markerReader.drawMarkers(color_image, ARUCO_DICT["DICT_4X4_50"], cameraMatrix, distortionCoeffs)
+        if found:
+            ## MOVE TO X
+            X=marker.tvec[0]
 
-        ## MOVE TO X
-        X=marker.tvec[0]
+            controller.goto() # todo: add the position
+            
+            # # MOVE ROBOT by marker.tvec
+            # distance = cv2.norm(marker.tvec[0], cv2.NORM_L2)
+            # rotationMatrix = cv2.Rodrigues(marker.rvec)[0].reshape(3)
+            # normal = rotationMatrix[2]
+            # camera_nodes = np.array([[0, 0],
+            #                          [0, 0 , distance / 3],
+            #                          normal * distance / 3,
+            #                          [marker.tvec[0]])
+            # curve = bezier.Curve(nodes, degree=2)
+            # curve
+            # Curve (degree=2, dimension=2)
+            distance = cv2.norm(marker.tvec[0], cv2.NORM_L2)
+            rotationMatrix = cv2.Rodrigues(marker.rvec[0])[0].reshape(3, 3)
+            # print(rotationMatrix)
+            normal = rotationMatrix[2]
+            print("N=", normal)
+            print("D0=", distance / 3)
+            print("D=", cv2.norm(normal * (distance / 3), cv2.NORM_L2))
+            camera_nodes = np.array([np.array([0, 0, 0]),
+                                     np.array([0, 0, distance / 3]),
+                                     marker.tvec[0] + (normal * (distance / 3)),
+                                     marker.tvec[0]])
+            print(camera_nodes)
+            curve = bezier(camera_nodes)
 
-        controller.goto() # todo: add the position
-        
-        # # MOVE ROBOT by marker.tvec
-        # distance = cv2.norm(marker.tvec[0], cv2.NORM_L2)
-        # rotationMatrix = cv2.Rodrigues(marker.rvec)[0].reshape(3)
-        # normal = rotationMatrix[2]
-        # camera_nodes = np.array([[0, 0],
-        #                          [0, 0 , distance / 3],
-        #                          normal * distance / 3,
-        #                          [marker.tvec[0]])
-        # curve = bezier.Curve(nodes, degree=2)
-        # curve
-        # Curve (degree=2, dimension=2)
-        
+            normals = np.zeros(curve.shape)
+            normals[0] = np.array([0, 0, 1])
+            normals[len(curve)-1] = -normal
+            for i in range(1, len(curve)-1):
+                v = curve[i+1] - curve[i-1]
+                normals[i] = v / cv2.norm(v, cv2.NORM_L2)
+                
+            with open('bezier.obj', 'w') as f:
+                sys.stdout = f
+                print("v", camera_nodes[0][0], camera_nodes[0][1], camera_nodes[0][2], "0 0 255")
+                # camera_nodes[1]
+                print("v", camera_nodes[1][0], camera_nodes[1][1], camera_nodes[1][2], "0 255 255")
+                # camera_nodes[2]
+                print("v", camera_nodes[2][0], camera_nodes[2][1], camera_nodes[2][2], "255 255 0")
+                # camera_nodes[3]
+                print("v", camera_nodes[3][0], camera_nodes[3][1], camera_nodes[3][2], "255 0 0")
+                for e in curve[1:len(curve)-1]:
+                    print("v", e[0], e[1], e[2], "125 125 125")
+                for n in normals:
+                    print("vn", n[0], n[1], n[2])
+            
         # Apply colormap on depth image (image must be converted to 8-bit per pixel first)
         depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
 
