@@ -20,8 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'goal_publisher = goal_publisher.goal_publisher:main'
-            'goal_publisher = goal_publisher.percept_and_publish:main'
+            'goal_publisher = goal_publisher.goal_publisher:main',
+            'percept_and_publish = goal_publisher.percept_and_publish:main'
         ],
     },
 )

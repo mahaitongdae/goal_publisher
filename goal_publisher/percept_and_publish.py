@@ -1,11 +1,15 @@
 import cv2
 import cv2.aruco
 import numpy as np
+import os.path as osp
+import sys
+from ament_index_python.packages import get_package_share_directory
 
 from geometry_msgs.msg import Pose
 from sensor_msgs.msg import JointState
 from collections import deque
 
+import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
 
@@ -18,8 +22,12 @@ cameraMatrix = np.array([[1, 0.0, 0.0],
                          [0.0, 0.0, 1.0]])
 distortionCoeffs = np.zeros((8), dtype=np.float32)
 
-cameraMatrix = np.load("cameraMatrix.npy")
-distortionCoeffs = np.load("distortions.npy")
+package_share_directory = get_package_share_directory('goal_publisher')
+print(package_share_directory)
+sys.path.append('~/colcon_ws/src/goal_publisher')
+
+cameraMatrix = np.load("/home/david/cameraMatrix.npy")
+distortionCoeffs = np.load("/home/david/distortions.npy")
 
 
 
@@ -30,15 +38,15 @@ class RobotController(Node):
         self.publisher_ = self.create_publisher(Pose, 'robot_arm_goal', 10)
         # timer_period = 0.5  # seconds
         # self.timer = self.create_timer(timer_period, self.timer_callback)
-        # self.i = 0
+        self.i = 0
         joint_states_topic = "/joint_states"
         eff_pose_topic = "/eff_pose"
         self.joint_velocity_stack = deque(maxlen=10)
         self.eff_pose_stack = deque(maxlen=10)
         
         qos = QoSProfile(depth=10)
-        self.create_subscription(JointState, joint_states_topic, self.joint_state_callback)
-        self.create_subscription(Pose, eff_pose_topic, self.eff_pose_callback)
+        self.create_subscription(JointState, joint_states_topic, self.joint_state_callback, qos)
+        self.create_subscription(Pose, eff_pose_topic, self.eff_pose_callback, qos)
 
     def joint_state_callback(self, data):
         self.joint_velocity_stack.append(data.velocity)
@@ -63,7 +71,8 @@ class RobotController(Node):
     def goto(self, position, orientation):
         # orientation is a 3*3 matrix
         #todo: convert orientation to quaterion
-        r = R.from_matrix(orientation)
+        self.get_logger().info('get goal: %s ' % position)
+        r = R.from_rotvec(orientation)
         orientation = r.as_quat()
         msg = Pose()
         msg.position.x = position[0]
@@ -120,7 +129,7 @@ class MarkerReader():
         
         self.markerDictionary = markerDictionary
         self.markerSize = markerSize
-        self.marker = np.array([Marker(), Marker(), Marker(), Marker()])
+        self.marker = Marker()
         self.nbMarkers=0
         
         self.noDistortion=np.zeros((5), dtype=np.float32)
@@ -155,8 +164,9 @@ class MarkerReader():
                     self.nbMarkers+=1
                     self.marker = Marker(allCorners, self.markerId, rvecs[i], tvecs[i], objPoints[i])
                     cv2.aruco.drawAxis(image, self.cameraMatrix, self.distortionCoeffs, rvecs[i], tvecs[i], 51)
-                    # print(self.marker.tvec)
-        return image, self.marker
+                    return True, image, self.marker
+        
+        return False, image, self.marker
     
     def drawMarkers(self, img, aruco_dict_type, matrix_coefficients, distortion_coefficients):
 
@@ -194,6 +204,7 @@ class MarkerReader():
                     cv2.aruco.drawAxis(frame, matrix_coefficients, distortion_coefficients, rvec, tvec, 0.01)  
 
         return frame
+
 
         
 # Chessboard
@@ -278,7 +289,8 @@ def chessboard(img):
 import pyrealsense2 as rs
 import numpy as np
 import cv2
-import bezier
+import matplotlib.pyplot as plt
+# import bezier
  
 
 # Configure depth and color streams
@@ -309,6 +321,7 @@ else:
 # Start streaming
 pipeline.start(config)
 
+rclpy.init()
 # controller
 controller = RobotController()
 
@@ -346,11 +359,11 @@ def bezier(points):
         zBezier = basisFunction(segs, i, t) * z[k] + zBezier
         i += 1
     
-    fig1 = plt.figure(figsize=(4, 4))
-    ax1 = fig1.add_subplot(111, projection='3d')
-    ax1.scatter(x, y, z, c='black')
-    ax1.plot(xBezier[0], yBezier[0], zBezier[0], c='blue')
-    plt.show()
+    # fig1 = plt.figure(figsize=(4, 4))
+    # ax1 = fig1.add_subplot(111, projection='3d')
+    # ax1.scatter(x, y, z, c='black')
+    # ax1.plot(xBezier[0], yBezier[0], zBezier[0], c='blue')
+    # plt.show()
     
     _bezier = np.zeros((divs, 3))
     _bezier[:, 0] = xBezier
@@ -415,8 +428,6 @@ try:
         if found:
             ## MOVE TO X
             X=marker.tvec[0]
-
-            controller.goto() # todo: add the position
             
             # # MOVE ROBOT by marker.tvec
             # distance = cv2.norm(marker.tvec[0], cv2.NORM_L2)
@@ -433,14 +444,15 @@ try:
             rotationMatrix = cv2.Rodrigues(marker.rvec[0])[0].reshape(3, 3)
             # print(rotationMatrix)
             normal = rotationMatrix[2]
-            print("N=", normal)
-            print("D0=", distance / 3)
-            print("D=", cv2.norm(normal * (distance / 3), cv2.NORM_L2))
+            controller.goto(X, normal) # todo: add the position
+            # print("N=", normal)
+            # print("D0=", distance / 3)
+            # print("D=", cv2.norm(normal * (distance / 3), cv2.NORM_L2))
             camera_nodes = np.array([np.array([0, 0, 0]),
                                      np.array([0, 0, distance / 3]),
                                      marker.tvec[0] + (normal * (distance / 3)),
                                      marker.tvec[0]])
-            print(camera_nodes)
+            controller.get_logger().info(str(camera_nodes))
             curve = bezier(camera_nodes)
 
             normals = np.zeros(curve.shape)
