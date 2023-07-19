@@ -1,12 +1,12 @@
 {
     "python.autoComplete.extraPaths": [
         "/home/mht/catkin_ws/devel/lib/python3/dist-packages",
-        "/opt/ros/noetic/lib/python3/dist-packages",
+        "/opt/ros/foxy/lib/python3.8/site-packages",
         "/home/mht/PycharmProjects/safe-control-gym"
     ],
     "python.analysis.extraPaths": [
         "/home/mht/catkin_ws/devel/lib/python3/dist-packages",
-        "/opt/ros/noetic/lib/python3/dist-packages",
+        "/opt/ros/foxy/lib/python3.8/site-packages",
         "/home/mht/PycharmProjects/safe-control-gym"
     ]
 }
