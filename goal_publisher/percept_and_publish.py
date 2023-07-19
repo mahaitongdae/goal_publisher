@@ -11,6 +11,7 @@ from rclpy.qos import QoSProfile
 
 
 from skimage.transform import ProjectiveTransform
+from scipy.spatial.transform import Rotation as R
 
 cameraMatrix = np.array([[1, 0.0, 0.0],
                          [0.0, 1.0, 0.0],
@@ -47,13 +48,23 @@ class RobotController(Node):
 
     def get_camera_position(self):
         pose = self.eff_pose_stack.pop()
+        position = [pose.position.x,
+                    pose.position.y,
+                    pose.position.z]
+        r = R.from_quat([pose.orientation.x,
+                         pose.orientation.y,
+                         pose.orientation.z,
+                         pose.orientation.w])
+        orientation = r.as_matrix()
+        
         # todo: convert end factor orientation to camera orientation
         return position, orientation
     
     def goto(self, position, orientation):
         # orientation is a 3*3 matrix
         #todo: convert orientation to quaterion
-        
+        r = R.from_matrix(orientation)
+        orientation = r.as_quat()
         msg = Pose()
         msg.position.x = position[0]
         msg.position.y = position[1]
